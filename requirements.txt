@@ -1,0 +1,24 @@
+# --- Core Math & Logic ---
+numpy>=1.24.0
+
+# --- Reinforcement Learning Stack ---
+# The environment standard
+pettingzoo>=1.24.0
+# The compatibility layer (Gymnasium <-> PettingZoo)
+shimmy>=1.0.0
+# The RL Algorithms (PPO, etc.) - Version 2.0+ supports Gymnasium
+stable-baselines3>=2.2.0
+# Pre-processing wrappers for Multi-Agent environments
+supersuit>=3.9.0
+# The standard interface (replaces OpenAI Gym)
+gymnasium>=0.29.0
+
+# --- Visualization & Rendering ---
+# Essential for window creation and input
+pygame>=2.5.0
+# (Optional) For the high-performance GPU glow effects we discussed
+moderngl>=5.8.0
+
+# --- Analysis & Logging ---
+# To view your training graphs (Reward vs Time)
+tensorboard>=2.15.0
