@@ -30,23 +30,31 @@ class TronSinglePlayerWrapper(gym.Env):
         return obs_dict["player_1"], info_dict["player_1"]
 
     def step(self, action):
-        # 1. Create actions dictionary
-        # AI controls Player 1
-        # Random logic controls Player 2
+        # 1. AI controls Player 1, Random controls Player 2
         p2_action = self.env.action_space("player_2").sample()
-        
-        actions = {
-            "player_1": action,
-            "player_2": p2_action
-        }
+        actions = { "player_1": action, "player_2": p2_action }
         
         # 2. Step the environment
         obs, rewards, terms, truncs, infos = self.env.step(actions)
         
-        # 3. Extract Player 1's data
-        # Note: If P1 dies, terms['player_1'] is True. 
-        # If P2 dies, terms['player_1'] might be True (game over) or False depending on your logic.
-        # Your env sets both to True if anyone dies, so this works.
+        # 3. CRITICAL FIX: Handle Player 1 Death
+        # If Player 1 died this step, 'player_1' will be missing from the dicts.
+        if "player_1" not in obs:
+            # Create a "Dead" observation (Zeroes)
+            dead_obs = np.zeros(self.observation_space.shape, dtype=np.uint8)
+            
+            # Return "Game Over" signal
+            # We assume a reward of -10 for dying (adjust if your env uses different values)
+            return dead_obs, -10.0, True, True, {}
+
+        # 4. Standard Return (Player 1 is still alive)
+        return (
+            obs["player_1"], 
+            rewards["player_1"], 
+            terms["player_1"], 
+            truncs["player_1"], 
+            infos["player_1"]
+        )
         
         return (
             obs["player_1"], 
