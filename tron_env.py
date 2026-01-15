@@ -19,6 +19,8 @@ VAL_WALL   = 1
 VAL_BOOST  = 2
 VAL_MY_HEAD = 3  
 VAL_ENEMY_HEAD = 4
+VAL_TRAIL_P1 = 5
+VAL_TRAIL_P2 = 6
 
 # --- ACTION MAPPING CONSTANTS ---
 ACT_UP    = 0
@@ -35,15 +37,19 @@ BOOST_YES = 1
 class TronEnv(ParallelEnv):
     def __init__(self):
         self.possible_agents = ["player_1", "player_2"]
+        self.agents = []
         self.width = 100
         self.height = 100
         
         # 6 grid elements (channels): empty, wall, boost, my character, enemy character
         # each value will take value of 0 or 1, 0 or 255 for AI to process in CNN
-        self.observation_spaces = {agent: spaces.Box(low=0, high=1, shape=(self.width, self.height, 5), dtype=np.uint8) for agent in self.agents}
-        # 6 actions are: forward, backwards, left, right, boost, toggle trail.
+        # 7 observation space items are no wall, wall, trail 1, trail 2, player 1, player 2, boost
+        self.observation_spaces = {agent: spaces.Box(low=0, high=255, shape=(self.width, self.height, 7), dtype=np.uint8) for agent in self.possible_agents}
+        # 6 actions are: forward, backwards, left, right, boost, toggle trail
         # 4 ways to steer, turn trail on or off, and boost or not boost (coast)
-        self.action_spaces = {agent: spaces.MultiDiscrete([4, 2, 2]) for agent in self.agents}
+        self.action_spaces = {agent: spaces.MultiDiscrete([4, 2, 2]) for agent in self.possible_agents}
+        
+        self.renderer = None
         
     
     def reset(self):
@@ -72,88 +78,36 @@ class TronEnv(ParallelEnv):
         self.boosts["player_2"] = 0
         
         
-        # create exterior walls
-        for i in range(len(rows)):
-            for j in range(len(cols)):
-                if i == 0 or i == 99 or j == 0 or j == 99:
-                    self.grid[i,j] = VAL_WALL
+   
+        # generate exterior walls
+        self.grid[0, :] = VAL_WALL
+        self.grid[-1, :] = VAL_WALL
+        self.grid[:, 0] = VAL_WALL
+        self.grid[:, -1] = VAL_WALL
         
-        # --- 2. GENERATE WALLS (Simplified) ---
-        # Add Border Walls
-        # self.grid[0, :] = VAL_WALL
-        # self.grid[-1, :] = VAL_WALL
-        # self.grid[:, 0] = VAL_WALL
-        # self.grid[:, -1] = VAL_WALL
+        # Replace the complex while loops with this simple pattern:
+        wall_type = 1
+        for _ in range(10): # Create 10 walls that are 5 x 1
+            while True:
+                rx, ry = randint(1, 98), randint(1, 98)
+                if self.grid[rx, ry] == VAL_EMPTY and (abs(rx - 30) > 5 and abs(rx - 70) > 5 and abs(ry - 50) > 5 and rx < 95 and ry < 95 and rx > 5 and ry > 5):
+                    for i in range(5):
+                        if wall_type == 1:
+                            self.grid[rx + i, ry] = VAL_WALL
+                        elif wall_type == -1:
+                            self.grid[rx, ry + i] = VAL_WALL 
+                    wall_type *= -1
+                    break
         
-        # create 30 interior walls
-        interior_walls = []
-        
-        wall_index = 0
-        for k in range(30):
-            if wall_index == 0:
-                rand_x = randint(10, 20)
-                rand_y = randint(10, 90)
-            elif wall_index == 1:
-                rand_x = randint(40, 60)
-                rand_y = randint(10, 90)
-            elif wall_index == 2:
-                rand_x = randint(70, 90)
-                rand_y = randint(10, 90)
-                
-            while((rand_x, rand_y) not in interior_walls):
-                if wall_index == 0:
-                    rand_x = randint(10, 20)
-                    rand_y = randint(10, 90)
-                elif wall_index == 1:
-                    rand_x = randint(40, 60)
-                    rand_y = randint(10, 90)
-                elif wall_index == 2:
-                    rand_x = randint(70, 90)
-                    rand_y = randint(10, 90)
-                    
-            interior_walls.append((rand_x, rand_y))
-            self.grid[rand_x, rand_y] =  VAL_WALL
+        for _ in range(10): # Create 10 boost units
+            while True:
+                rx, ry = randint(1, 98), randint(1, 98)
+                if self.grid[rx, ry] == VAL_EMPTY:
+                    self.grid[rx, ry] = VAL_BOOST
+                    break
             
-            if wall_index != 2:
-                wall_index += 1
-            else:
-                wall_index = 0
-            
-        # create 10 boost units
-        boost_index = 0
-        boost_units = []
-        
-        for k in range(10):
-            if boost_index == 0:
-                rand_x = randint(10, 20)
-                rand_y = randint(10, 90)
-            elif boost_index == 1:
-                rand_x = randint(40, 60)
-                rand_y = randint(10, 90)
-            elif boost_index == 2:
-                rand_x = randint(70, 90)
-                rand_y = randint(10, 90)
                 
-            while((rand_x, rand_y) not in boost_units and (rand_x, rand_y) not in interior_walls):
-                if boost_index == 0:
-                    rand_x = randint(10, 20)
-                    rand_y = randint(10, 90)
-                elif boost_index == 1:
-                    rand_x = randint(40, 60)
-                    rand_y = randint(10, 90)
-                elif boost_index == 2:
-                    rand_x = randint(70, 90)
-                    rand_y = randint(10, 90)
-                
-            interior_walls.append((rand_x, rand_y))
-            self.grid[rand_x, rand_y] =  VAL_BOOST
-            
-            if boost_index != 2:
-                boost_index += 1
-            else:
-                boost_index = 0
-                
-        return {a: self.observe(a) for a in self.agents}, {a: {} for a in self.agents}
+        return ({a: self.observe(a) for a in self.agents}, {a: {} for a in self.agents})
         
         
         
@@ -168,12 +122,15 @@ class TronEnv(ParallelEnv):
         
         died_this_step = []
         
-        for agent in self.agents:
+        agents_order = self.agents[:]
+        # Correct
+        np.random.shuffle(agents_order)
+        
+        # creates a copy of self.agents
+        for agent in agents_order:
             
-            for temp_agent in self.agents:
-                if temp_agent != agent:
-                    other_agent = temp_agent
-                    break
+            other_agent = "player_1" if agent == "player_2" else "player_2"
+            my_trail_val = VAL_TRAIL_P1 if agent == "player_1" else VAL_TRAIL_P2
             
             action = actions[agent]
             current_move_cmd = action[0]
@@ -212,27 +169,36 @@ class TronEnv(ParallelEnv):
                 rewards[agent] -= 0.1
                 
             if final_move_cmd == ACT_UP:
-                dy += move_distance 
+                dy -= move_distance 
             elif final_move_cmd == ACT_DOWN:
-                dy -= move_distance
+                dy += move_distance
             elif final_move_cmd == ACT_LEFT:
-                dx -= move_distance
-            elif final_move_cmd == ACT_RIGHT:
                 dx += move_distance
+            elif final_move_cmd == ACT_RIGHT:
+                dx -= move_distance
             
             final_x, final_y = current_x + dx, current_y + dy
             
-            # check if the final position is blocked by a wall or another player
-            if self.grid[final_x, final_y] == VAL_WALL:
+            # hitting a wall
+            if not(0 <= final_x < self.width and 0 <= final_y < self.height) or self.grid[final_x, final_y] == VAL_WALL:
+                terminations[agent] = True
+                terminations[other_agent] = True
+                died_this_step.append(agent)
+                rewards[agent] -= 10
+            
+            # hitting a trail
+            elif self.grid[final_x, final_y] == VAL_TRAIL_P1 or self.grid[final_x, final_y] == VAL_TRAIL_P2:
                 terminations[agent] = True
                 terminations[other_agent] = True
                 died_this_step.append(agent)
                 rewards[agent] -= 10
                 
+            # hitting an enemy head on or from the side
             elif self.grid[final_x, final_y] == VAL_ENEMY_HEAD:
                 terminations[agent] = True
                 rewards[agent] -= 5
                 
+           
             elif self.grid[final_x, final_y] == VAL_EMPTY:
                 rewards[agent] += 0.05
                 
@@ -240,23 +206,27 @@ class TronEnv(ParallelEnv):
             if teleport:
                 self.grid[final_x, final_y] =  VAL_MY_HEAD
                 
-            elif not teleport and trail_cmd == TRAIL_ON:
-                self.grid[current_x, current_y] = VAL_WALL
+            if trail_cmd == TRAIL_ON:
+                self.grid[current_x, current_y] = my_trail_val
+            else:
+                self.grid[current_x, current_y] = VAL_EMPTY
                 
             # check if the player went over a boost, if so increase total boosts by 1
             # checking that the agent didn't die while going over the boost
-            if agent in self.agents:
-                if self.grid[final_x, final_y] == VAL_BOOST:
-                    self.boosts[agent] += 1
+          
+            if self.grid[final_x, final_y] == VAL_BOOST:
+                self.boosts[agent] = min(self.boosts[agent] + 1.0, 10)
+                rewards[agent] += 1.0
+            
+            self.agent_positions[agent] = (final_x, final_y)
+            self.agent_dirs[agent] = final_move_cmd
                     
         if(len(died_this_step) == 1):
             # only 1 agent died so only 1 will get the positive reward of winning the game
             agent_dead = died_this_step[0]
-            for temp_agent in self.possible_agents:
-                if temp_agent != agent_dead:
-                    agent_winner = temp_agent
-                else:
-                    self.agents.remove(temp_agent)
+            agent_winner = "player_1" if agent_dead == "player_2" else "player_2"
+            self.agents.remove(agent_dead)
+                    
             # reward of 10 points for the agent winning
             rewards[agent_winner] += 10
         
@@ -270,33 +240,50 @@ class TronEnv(ParallelEnv):
     
     
     def observe(self, agent):
-        obs = np.zeros((self.width, self.height, 5), dtype=np.uint8)
+        obs = np.zeros((self.width, self.height, 7), dtype=np.uint8)
         # creating an observation that is contains a 100 x 100 array for each type of grid component 
         # (wall (spawned in or generated by player), player 1 position, player 2 position,  energy boosts left on the map, energy dashboard (how many energy boosts picked up by a player))
-        obs[:, :, 0] = (self.grid == self.VAL_WALL).astype(np.uint8) * 255
+        obs[:, :, 0] = (self.grid == VAL_WALL).astype(np.uint8) 
         if agent == "player_1":
-            obs[:, :, 1] = (self.grid == self.VAL_MY_HEAD).astype(np.uint8) * 255
-            obs[:, :, 2] = (self.grid == self.VAL_ENEMY_HEAD).astype(np.uint8) * 255
+            obs[:, :, 1] = (self.grid == VAL_MY_HEAD).astype(np.uint8) 
+            obs[:, :, 2] = (self.grid == VAL_ENEMY_HEAD).astype(np.uint8) 
         elif agent == "player_2":
-            obs[:, :, 1] = (self.grid == self.VAL_ENEMY_HEAD).astype(np.uint8) * 255
-            obs[:, :, 2] = (self.grid == self.VAL_MY_HEAD).astype(np.uint8) * 255
+            obs[:, :, 1] = (self.grid == VAL_ENEMY_HEAD).astype(np.uint8) 
+            obs[:, :, 2] = (self.grid == VAL_MY_HEAD).astype(np.uint8) 
         else:
-            obs[:, :, 1] = (self.grid == self.VAL_MY_HEAD).astype(np.uint8) * 255
-            obs[:, :, 2] = (self.grid == self.VAL_ENEMY_HEAD).astype(np.uint8) * 255
+            obs[:, :, 1] = (self.grid == VAL_MY_HEAD).astype(np.uint8) 
+            obs[:, :, 2] = (self.grid == VAL_ENEMY_HEAD).astype(np.uint8) 
             
-        obs[:, :, 3] = (self.grid == self.VAL_BOOST).astype(np.uint8) * 255
+        obs[:, :, 3] = (self.grid == VAL_BOOST).astype(np.uint8) 
         
         # represents the number of energy boosts an agent has collected
         energy_boost_value = 255 * (self.boosts[agent]/10)
         obs[:, :, 4] = np.full((self.width, self.height), energy_boost_value, dtype=np.uint8)
         
-        return obs
+        # add the trails that the bikes leave behind so CNN can understand them (don't make them the same type as walls)
+        my_trail_val = VAL_TRAIL_P1 if agent == "player_1" else VAL_TRAIL_P2
+        obs[:, :, 5] = (self.grid == my_trail_val).astype(np.uint8) 
+        
+        enemy_trail_val = VAL_TRAIL_P2 if agent == "player_1" else VAL_TRAIL_P1
+        obs[:, :, 6] = (self.grid == enemy_trail_val).astype(np.uint8) 
+        
+        return obs * 255
         
         
         
-    def redner(self):
-        pass
-    
+    def render(self):
+        if self.renderer is None:
+            from tron_renderer import TronRenderer
+            self.renderer = TronRenderer(self.width, self.height)
+
+        # FIX: Don't check for "is_open". Just render.
+        # The play.py script handles closing now.
+        self.renderer.render_frame(self.grid)
+            
+    def close(self):
+        if self.renderer:
+            self.renderer.close()
+            self.renderer = None
     
     def observation_space(self, agent):
         return self.observation_spaces[agent]
