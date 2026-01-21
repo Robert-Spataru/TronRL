@@ -74,7 +74,7 @@ class TronEnv(ParallelEnv):
         self.grid[70, 50] = VAL_ENEMY_HEAD
         self.agent_positions["player_2"] = (70, 50)
         self.agent_dirs["player_2"] = 4
-        self.trails_active["player_1"] = True
+        self.trails_active["player_2"] = True  # changed: was "player_1"
         self.boosts["player_2"] = 0
         
         

@@ -1,6 +1,6 @@
 import time
 from stable_baselines3 import PPO
-from train import TronSinglePlayerWrapper # Import the wrapper from your train script
+from train import TronSinglePlayerWrapper
 
 # 1. Load Environment
 env = TronSinglePlayerWrapper()
@@ -13,6 +13,8 @@ model = PPO.load(model_path, env=env)
 obs, _ = env.reset()
 done = False
 
+print("Watching trained agent play...")
+
 while not done:
     # Predict the best action (deterministic=True creates more stable behavior)
     action, _states = model.predict(obs, deterministic=True)
@@ -24,10 +26,11 @@ while not done:
     env.render()
     
     # Slow it down so humans can see
-    # (The AI thinks instantly, so without this the game finishes in 50ms)
     time.sleep(0.05)
 
     if done or truncated:
-        print("Game Finished")
+        print("Game Finished. Starting new game...")
         obs, _ = env.reset()
         done = False
+
+env.close()

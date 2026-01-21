@@ -5,7 +5,7 @@ from tron_env import TronEnv
 
 # --- CONSTANTS ---
 FPS = 60
-MOVE_DELAY = 0.05  
+MOVE_DELAY = 0.05
 ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT = 0, 1, 2, 3
 
 # 1. INIT PYGAME IMMEDIATELY
@@ -56,8 +56,9 @@ while running:
     if time_since_last_move >= MOVE_DELAY:
         
         p1_action = [next_move, next_trail, next_boost]
-        p2_action = [random.randint(0, 3), 1, 0] 
-
+        p2_space = env.action_space("player_2")
+        p2_action = p2_space.sample()  # changed: properly sample from MultiDiscrete
+        
         actions = { "player_1": p1_action, "player_2": p2_action }
         next_boost = 0 
         

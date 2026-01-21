@@ -37,10 +37,8 @@ class TronSinglePlayerWrapper(gym.Env):
     def step(self, action):
         # 1. AI controls Player 1, Random controls Player 2
         p2_space = self.env.action_space("player_2")
-        if self.np_random is not None and hasattr(p2_space, "n"):  # added deterministic sampling
-            p2_action = int(self.np_random.integers(p2_space.n))
-        else:
-            p2_action = p2_space.sample()
+        # Sample from MultiDiscrete properly: returns array [move, trail, boost]
+        p2_action = p2_space.sample()  # changed: now returns proper [4, 2, 2] action
         actions = { "player_1": action, "player_2": p2_action }
         
         # 2. Step the environment with robust error handling
@@ -51,18 +49,24 @@ class TronSinglePlayerWrapper(gym.Env):
             dead_obs = np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
             return dead_obs, -10.0, True, False, {}
 
-        # 3. Handle Player 1 Death when the env omits its keys
+        # 3. Extract Player 1's reward BEFORE checking if player is in obs
+        p1_reward = rewards.get("player_1", -10.0)  # changed
+        p1_terminated = terms.get("player_1", False)  # changed
+        p1_truncated = truncs.get("player_1", False)  # changed
+        p1_info = infos.get("player_1", {})  # changed
+
+        # 4. Handle Player 1 Death when the env omits its keys
         if "player_1" not in obs:
             dead_obs = np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
-            return dead_obs, -10.0, True, False, {}
+            return dead_obs, p1_reward, True, False, p1_info
 
-        # 4. Standard Return (Player 1 is still alive)
+        # 5. Standard Return (Player 1 is still alive)
         return (
             obs["player_1"], 
-            float(rewards["player_1"]), 
-            bool(terms["player_1"]), 
-            bool(truncs["player_1"]), 
-            infos.get("player_1", {})
+            float(p1_reward), 
+            bool(p1_terminated), 
+            bool(p1_truncated), 
+            p1_info
         )
     
 
