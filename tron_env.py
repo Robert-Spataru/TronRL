@@ -115,10 +115,10 @@ class TronEnv(ParallelEnv):
         rewards = {}
         terminations = {}
         # (We assume everyone survives and gets 0 points initially)
-        rewards = {a: 0 for a in self.agents}
-        terminations = {a: False for a in self.agents}
-        truncations = {a: False for a in self.agents}
-        infos = {a: {} for a in self.agents}
+        rewards = {a: 0 for a in self.possible_agents}
+        terminations = {a: False for a in self.possible_agents}
+        truncations = {a: False for a in self.possible_agents}
+        infos = {a: {} for a in self.possible_agents}
         
         died_this_step = []
         
@@ -142,8 +142,8 @@ class TronEnv(ParallelEnv):
             if boost_cmd == BOOST_YES and self.boosts[agent] >= 1:
                 # using one of the boosts
                 self.boosts[agent] -= 1
-            else:
-                print("No more boosts left, can't use it")
+            # else:
+            #     print("No more boosts left, can't use it")
             
             prev_move_cmd = self.agent_dirs[agent]
             final_move_cmd = current_move_cmd
@@ -173,9 +173,9 @@ class TronEnv(ParallelEnv):
             elif final_move_cmd == ACT_DOWN:
                 dy += move_distance
             elif final_move_cmd == ACT_LEFT:
-                dx += move_distance
-            elif final_move_cmd == ACT_RIGHT:
                 dx -= move_distance
+            elif final_move_cmd == ACT_RIGHT:
+                dx += move_distance
             
             final_x, final_y = current_x + dx, current_y + dy
             
@@ -291,4 +291,3 @@ class TronEnv(ParallelEnv):
     
     def action_space(self, agent):
         return self.action_spaces[agent]
-    

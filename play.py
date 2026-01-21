@@ -63,15 +63,14 @@ while running:
         
         if env.agents:
             obs, rewards, terms, truncs, infos = env.step(actions)
+            print(f"P1: move={next_move}, boost={p1_action[2]}, trail={next_trail} | Rewards: {rewards}")
             
             # Check Game Over
             if not env.agents:
-                print("Game Over! Restarting...")
-                env.reset()
-                next_move = ACT_LEFT 
-                # Flash the screen red (optional visual feedback could go here)
+                print("Game Over! All agents eliminated.")
+                running = False
         
-        time_since_last_move -= MOVE_DELAY
+        time_since_last_move = 0.0  # FIXED: Reset to 0, not -= MOVE_DELAY
 
     # D. RENDER STEP
     env.render()

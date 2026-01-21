@@ -5,6 +5,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import CheckpointCallback
+from gymnasium.utils import seeding  # added
 
 # Import your environment
 from tron_env import TronEnv
@@ -17,52 +18,53 @@ class TronSinglePlayerWrapper(gym.Env):
     def __init__(self):
         super().__init__()
         self.env = TronEnv()
+        self.np_random = None  # added
         
         # We only expose Player 1's spaces to the RL Agent
         self.observation_space = self.env.observation_space("player_1")
         self.action_space = self.env.action_space("player_1")
         
     def reset(self, seed=None, options=None):
+        # Initialize wrapper RNG; do NOT pass seed to TronEnv.reset
+        if seed is not None:
+            self.np_random, _ = seeding.np_random(seed)  # added
         # 1. Reset the underlying multi-agent env
-        obs_dict, info_dict = self.env.reset()
+        obs_dict, info_dict = self.env.reset()  # changed: removed seed=seed
         
         # 2. Return only Player 1's observation
-        return obs_dict["player_1"], info_dict["player_1"]
+        return obs_dict["player_1"], info_dict.get("player_1", {})
 
     def step(self, action):
         # 1. AI controls Player 1, Random controls Player 2
-        p2_action = self.env.action_space("player_2").sample()
+        p2_space = self.env.action_space("player_2")
+        if self.np_random is not None and hasattr(p2_space, "n"):  # added deterministic sampling
+            p2_action = int(self.np_random.integers(p2_space.n))
+        else:
+            p2_action = p2_space.sample()
         actions = { "player_1": action, "player_2": p2_action }
         
-        # 2. Step the environment
-        obs, rewards, terms, truncs, infos = self.env.step(actions)
-        
-        # 3. CRITICAL FIX: Handle Player 1 Death
-        # If Player 1 died this step, 'player_1' will be missing from the dicts.
+        # 2. Step the environment with robust error handling
+        try:
+            obs, rewards, terms, truncs, infos = self.env.step(actions)
+        except IndexError:
+            # Treat out-of-bounds index in underlying env as a terminal event for Player 1
+            dead_obs = np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+            return dead_obs, -10.0, True, False, {}
+
+        # 3. Handle Player 1 Death when the env omits its keys
         if "player_1" not in obs:
-            # Create a "Dead" observation (Zeroes)
-            dead_obs = np.zeros(self.observation_space.shape, dtype=np.uint8)
-            
-            # Return "Game Over" signal
-            # We assume a reward of -10 for dying (adjust if your env uses different values)
-            return dead_obs, -10.0, True, True, {}
+            dead_obs = np.zeros(self.observation_space.shape, dtype=self.observation_space.dtype)
+            return dead_obs, -10.0, True, False, {}
 
         # 4. Standard Return (Player 1 is still alive)
         return (
             obs["player_1"], 
-            rewards["player_1"], 
-            terms["player_1"], 
-            truncs["player_1"], 
-            infos["player_1"]
+            float(rewards["player_1"]), 
+            bool(terms["player_1"]), 
+            bool(truncs["player_1"]), 
+            infos.get("player_1", {})
         )
-        
-        return (
-            obs["player_1"], 
-            rewards["player_1"], 
-            terms["player_1"], 
-            truncs["player_1"], 
-            infos["player_1"]
-        )
+    
 
     def render(self):
         return self.env.render()
